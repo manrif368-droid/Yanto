@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fish It 3D - Roblox Style Fishing</title>
+    <!-- Tailwind CSS untuk UI modern ala Roblox -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js untuk rendering dunia 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Tone.js untuk efek suara tanpa file eksternal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Font Fredoka & Inter untuk nuansa game Roblox yang ceria & tegas -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background-color: #1e293b;
+        }
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        /* Gaya Tombol ala Roblox */
+        .roblox-btn {
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35);
+            border: 3px solid rgba(255, 255, 255, 0.25);
+        }
+        .roblox-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+        }
+        .roblox-panel {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(10px);
+            border: 3px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        /* Animasi Tanda Seru saat ikan menggigit */
+        @keyframes bounceExclamation {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-15px) scale(1.15); }
+        }
+        .animate-bite {
+            animation: bounceExclamation 0.4s infinite;
+        }
+        /* Custom Scrollbar untuk Toko & Tas */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <!-- Canvas 3D Utama -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer" class="relative z-10 w-full h-full pointer-events-none flex flex-col justify-between p-3 sm:p-5">
+        
+        <!-- Header Atas: Koin, Level, & Tombol Menu -->
+        <div class="flex flex-wrap items-start justify-between gap-2">
+            <!-- Status Pemain -->
+            <div class="flex flex-col gap-2 pointer-events-auto">
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <!-- Koin -->
+                    <div class="roblox-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2">
+                        <span class="text-xl sm:text-2xl">🪙</span>
+                        <div>
+                            <div class="text-[10px] sm:text-xs text-slate-300 uppercase tracking-wider font-semibold">Koin</div>
+                            <div id="coin-display" class="text-base sm:text-xl font-bold text-yellow-400">0</div>
+                        </div>
+                    </div>
+                    <!-- Level & XP -->
+                    <div class="roblox-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2">
+                        <span class="text-xl sm:text-2xl">⭐</span>
+                        <div>
+                            <div class="text-[10px] sm:text-xs text-slate-300 uppercase tracking-wider font-semibold">Level <span id="level-display" class="text-cyan-400">1</span></div>
+                            <div class="w-20 sm:w-28 h-2.5 bg-slate-700 rounded-full overflow-hidden mt-1 border border-slate-600">
+                                <div id="xp-bar" class="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-300" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info Joran & Umpan Aktif -->
+                <div class="roblox-panel px-3 py-1.5 rounded-xl inline-flex items-center gap-3 text-xs sm:text-sm self-start">
+                    <span>🎣 <b id="active-rod-name" class="text-amber-300">Joran Kayu</b></span>
+                    <span class="text-slate-500">|</span>
+                    <span>🪱 <b id="active-bait-name" class="text-pink-300">Cacing Biasa (∞)</b></span>
+                </div>
+            </div>
+
+            <!-- Tombol Navigasi Menu (Tas, Toko, Buku Ikan, Suara) -->
+            <div class="flex items-center gap-2 pointer-events-auto">
+                <button onclick="toggleModal('inventory-modal')" class="roblox-btn bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>🎒</span> <span class="hidden sm:inline">Tas</span> (<span id="bag-count">0</span>)
+                </button>
+                <button onclick="toggleModal('shop-modal')" class="roblox-btn bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>🏪</span> <span class="hidden sm:inline">Toko</span>
+                </button>
+                <button onclick="toggleModal('index-modal')" class="roblox-btn bg-indigo-500 hover:bg-indigo-400 text-white font-bold px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>📖</span> <span class="hidden sm:inline">Ikan</span>
+                </button>
+                <button id="sound-btn" onclick="toggleSound()" class="roblox-btn bg-slate-700 hover:bg-slate-600 text-white font-bold p-2 sm:p-2.5 rounded-2xl text-sm">
+                    🔊
+                </button>
+            </div>
+        </div>
+
+        <!-- Area Tengah: Notifikasi & Minigame Mancing -->
+        <div class="flex flex-col items-center justify-center my-auto relative">
+            
+            <!-- Notifikasi Toast / Pop-up Tangkapan -->
+            <div id="toast-container" class="flex flex-col items-center gap-2 mb-4 pointer-events-none"></div>
+
+            <!-- Indikator Ikan Menggigit (!) -->
+            <div id="bite-indicator" class="hidden flex-col items-center animate-bite pointer-events-none mb-4">
+                <div class="bg-red-600 text-white font-black text-4xl sm:text-5xl w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center border-4 border-white shadow-2xl">
+                    !
+                </div>
+                <span class="mt-2 bg-black/75 px-3 py-1 rounded-full text-xs sm:text-sm font-bold text-yellow-300 tracking-wide">
+                    TARIK SEKARANG!
+                </span>
+            </div>
+
+            <!-- Bar Kekuatan Lemparan (Charging) -->
+            <div id="charge-container" class="hidden flex-col items-center w-56 sm:w-64 roblox-panel p-3 rounded-2xl">
+                <div class="text-xs font-bold text-cyan-300 mb-1.5 uppercase tracking-wider">Kekuatan Lemparan</div>
+                <div class="w-full h-5 bg-slate-800 rounded-full overflow-hidden border-2 border-slate-600 p-0.5">
+                    <div id="charge-bar" class="h-full bg-gradient-to-r from-green-400 via-yellow-400 to-red-500 rounded-full" style="width: 0%;"></div>
+                </div>
+            </div>
+
+            <!-- MINIGAME REELING (Ala Fisch / Stardew Valley) -->
+            <div id="reeling-minigame" class="hidden flex-col items-center w-72 sm:w-96 roblox-panel p-4 rounded-3xl border-4 border-cyan-400/50">
+                <div class="flex justify-between w-full text-xs sm:text-sm font-bold mb-2">
+                    <span class="text-cyan-300">🎣 Tahan tombol agar ikan di kotak hijau!</span>
+                    <span id="reel-percent" class="text-yellow-400">30%</span>
+                </div>
+
+                <!-- Track Minigame -->
+                <div id="reel-track" class="relative w-full h-10 bg-slate-900 rounded-2xl border-2 border-slate-600 overflow-hidden mb-3">
+                    <!-- Kotak Penangkap Hijau (Player Bar) -->
+                    <div id="player-catch-bar" class="absolute top-0 bottom-0 bg-emerald-500/80 border-x-2 border-emerald-300 rounded-lg transition-none" style="left: 10%; width: 28%;"></div>
+                    <!-- Ikon Ikan Target -->
+                    <div id="target-fish-icon" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 text-2xl transition-none drop-shadow-md" style="left: 50%;">
+                        🐟
+                    </div>
+                </div>
+
+                <!-- Bar Progres Tangkapan -->
+                <div class="w-full h-3.5 bg-slate-800 rounded-full overflow-hidden border border-slate-600">
+                    <div id="catch-progress-bar" class="h-full bg-gradient-to-r from-yellow-400 to-emerald-400 transition-none" style="width: 30%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Bawah: Kontrol Utama & Petunjuk Kamera -->
+        <div class="flex flex-col items-center gap-2 pb-1">
+            <div class="text-[11px] sm:text-xs text-white/80 bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm text-center">
+                🕹️ WASD / Panah / Joystick untuk jalan • Geser layar putar kamera
+            </div>
+            
+            <!-- Tombol Aksi Utama -->
+            <button id="action-btn" class="pointer-events-auto roblox-btn bg-gradient-to-b from-sky-400 to-blue-600 hover:from-sky-300 hover:to-blue-500 text-white font-black text-lg sm:text-xl px-8 py-3.5 sm:px-12 sm:py-4 rounded-3xl tracking-wide shadow-xl flex items-center gap-3">
+                <span id="action-btn-icon">🎣</span>
+                <span id="action-btn-text">LEMPAR PANCING</span>
+            </button>
+        </div>
+
+        <!-- Joystick Virtual Kiri Bawah (Untuk Mobile & Klik Mouse) -->
+        <div id="joystick-zone" class="fixed bottom-4 left-4 z-20 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-900/50 border-2 border-white/25 backdrop-blur-sm pointer-events-auto flex items-center justify-center touch-none">
+            <div id="joystick-knob" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/80 shadow-lg border-2 border-sky-400 pointer-events-none transition-transform duration-75"></div>
+        </div>
+
+        <!-- Credit Pembuat di Pojok Kanan Bawah -->
+        <div class="fixed bottom-2 right-3 z-20 pointer-events-none">
+            <div class="bg-slate-900/80 backdrop-blur-md border border-white/20 px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold text-amber-300 shadow-lg">
+                ✨ by Sarip
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 1: TAS / INVENTORY -->
+    <div id="inventory-modal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="roblox-panel w-full max-w-lg rounded-3xl p-5 flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-3">
+                <h2 class="text-xl sm:text-2xl font-bold text-amber-400 flex items-center gap-2">🎒 Tas Ikan (<span id="modal-bag-count">0</span>)</h2>
+                <button onclick="toggleModal('inventory-modal')" class="bg-red-500 hover:bg-red-400 text-white w-8 h-8 rounded-xl font-bold">✕</button>
+            </div>
+            
+            <div id="inventory-list" class="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2.5 pr-1">
+                <!-- Daftar ikan hasil tangkapan diisi oleh JS -->
+            </div>
+
+            <div class="border-t border-slate-700 pt-3 mt-3 flex justify-between items-center">
+                <div class="text-sm text-slate-300">Total Nilai: <b id="total-bag-value" class="text-yellow-400">0 🪙</b></div>
+                <button onclick="sellAllFish()" class="roblox-btn bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold px-5 py-2 rounded-xl text-sm">
+                    Jual Semua Ikan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: TOKO JORAN & UMPAN -->
+    <div id="shop-modal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="roblox-panel w-full max-w-xl rounded-3xl p-5 flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-3">
+                <h2 class="text-xl sm:text-2xl font-bold text-emerald-400 flex items-center gap-2">🏪 Toko Peralatan</h2>
+                <button onclick="toggleModal('shop-modal')" class="bg-red-500 hover:bg-red-400 text-white w-8 h-8 rounded-xl font-bold">✕</button>
+            </div>
+
+            <div class="overflow-y-auto space-y-4 pr-1">
+                <!-- Bagian Joran -->
+                <div>
+                    <h3 class="text-sm uppercase tracking-wider text-slate-400 font-bold mb-2">🎣 Upgrade Joran (Memperbesar Kotak Tangkap & Luck)</h3>
+                    <div id="shop-rods-list" class="grid grid-cols-1 gap-2.5"></div>
+                </div>
+
+                <!-- Bagian Umpan -->
+                <div>
+                    <h3 class="text-sm uppercase tracking-wider text-slate-400 font-bold mb-2">🪱 Beli Umpan (Meningkatkan Peluang Ikan Langka)</h3>
+                    <div id="shop-baits-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: ENSIKLOPEDIA IKAN (BESTIARY) -->
+    <div id="index-modal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="roblox-panel w-full max-w-xl rounded-3xl p-5 flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-3">
+                <h2 class="text-xl sm:text-2xl font-bold text-indigo-400 flex items-center gap-2">📖 Ensiklopedia Ikan</h2>
+                <button onclick="toggleModal('index-modal')" class="bg-red-500 hover:bg-red-400 text-white w-8 h-8 rounded-xl font-bold">✕</button>
+            </div>
+            <div id="bestiary-list" class="overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2.5 pr-1"></div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. DATA GAME & KONFIGURASI (IKAN, JORAN, UMPAN)
+         * ============================================================================
+         */
+        const FISH_TYPES = [
+            { id: 'nemo', name: 'Kotak Ikan Badut', rarity: 'Common', color: 'text-slate-200', badge: 'bg-slate-600', icon: '🐠', hexColor: 0xf97316, basePrice: 15, xp: 10, weight: 40, speed: 1.2 },
+            { id: 'tuna', name: 'Kotak Tuna Sirip Biru', rarity: 'Common', color: 'text-slate-200', badge: 'bg-slate-600', icon: '🐟', hexColor: 0x3b82f6, basePrice: 25, xp: 15, weight: 35, speed: 1.5 },
+            { id: 'puffer', name: 'Kotak Ikan Buntal', rarity: 'Uncommon', color: 'text-emerald-400', badge: 'bg-emerald-700', icon: '🐡', hexColor: 0xfacc15, basePrice: 55, xp: 30, weight: 20, speed: 2.0 },
+            { id: 'octopus', name: 'Kotak Gurita Ungu', rarity: 'Uncommon', color: 'text-emerald-400', badge: 'bg-emerald-700', icon: '🐙', hexColor: 0xa855f7, basePrice: 75, xp: 40, weight: 15, speed: 2.3 },
+            { id: 'swordfish', name: 'Kotak Ikan Todak', rarity: 'Rare', color: 'text-sky-400', badge: 'bg-sky-700', icon: '🗡️', hexColor: 0x38bdf8, basePrice: 150, xp: 75, weight: 8, speed: 3.1 },
+            { id: 'shark', name: 'Kotak Hiu Putih', rarity: 'Epic', color: 'text-purple-400', badge: 'bg-purple-700', icon: '🦈', hexColor: 0x94a3b8, basePrice: 350, xp: 150, weight: 4, speed: 3.9 },
+            { id: 'whale', name: 'Kotak Paus Biru Raksasa', rarity: 'Legendary', color: 'text-amber-400', badge: 'bg-amber-600', icon: '🐋', hexColor: 0x1d4ed8, basePrice: 800, xp: 300, weight: 1.5, speed: 4.6 },
+            { id: 'kraken', name: 'Kotak Naga Laut Kuno', rarity: 'Mythical', color: 'text-rose-400', badge: 'bg-rose-600', icon: '🐉', hexColor: 0xf43f5e, basePrice: 2000, xp: 750, weight: 0.5, speed: 5.4 }
+        ];
+
+        const RODS = [
+            { id: 'wood', name: 'Joran Kayu', price: 0, barSize: 28, luck: 1.0, color: 0x8B5A2B, desc: 'Joran pemula standar.' },
+            { id: 'fiberglass', name: 'Joran Fiberglass', price: 120, barSize: 35, luck: 1.3, color: 0x38bdf8, desc: 'Lebih lentur, kotak tangkap +7%.' },
+            { id: 'carbon', name: 'Joran Karbon Pro', price: 450, barSize: 42, luck: 1.7, color: 0x334155, desc: 'Ringan & kuat, peluang ikan langka +70%.' },
+            { id: 'golden', name: 'Joran Emas Sultan', price: 1500, barSize: 50, luck: 2.5, color: 0xfacc15, desc: 'Menarik ikan legendaris dengan mudah!' },
+            { id: 'trident', name: 'Trisula Poseidon', price: 5000, barSize: 60, luck: 4.0, color: 0x2dd4bf, desc: 'Senjata dewa lautan. Kotak tangkap raksasa!' }
+        ];
+
+        const BAITS = [
+            { id: 'worm', name: 'Cacing Biasa', price: 0, luckBonus: 0, count: Infinity, desc: 'Umpan gratis tanpa batas.' },
+            { id: 'shrimp', name: 'Udang Segar (x5)', price: 60, luckBonus: 0.5, amount: 5, desc: 'Menambah Luck +0.5 selama 5x lemparan.' },
+            { id: 'glow', name: 'Umpan Bercahaya (x5)', price: 200, luckBonus: 1.5, amount: 5, desc: 'Sangat disukai ikan Epic & Legendary!' }
+        ];
+
+        // State Pemain
+        let state = {
+            coins: 50,
+            level: 1,
+            xp: 0,
+            xpToNext: 100,
+            equippedRod: 'wood',
+            ownedRods: ['wood'],
+            equippedBait: 'worm',
+            baitInventory: { worm: Infinity, shrimp: 0, glow: 0 },
+            bag: [],
+            discoveredFish: {},
+            soundEnabled: true,
+            // State Mancing: 'IDLE' | 'CHARGING' | 'CASTING' | 'WAITING' | 'BITING' | 'REELING'
+            fishingState: 'IDLE',
+            chargePower: 0,
+            chargeDir: 1,
+            biteTimer: null,
+            biteTimeout: null,
+            currentFish: null
+        };
+
+        // Variabel Minigame Reeling
+        let reelData = {
+            barPos: 20,      // Posisi kiri kotak hijau (0 - 100)
+            barVel: 0,       // Kecepatan kotak hijau
+            fishPos: 50,     // Posisi ikan (0 - 100)
+            fishTarget: 50,  // Tujuan gerak ikan
+            fishTimer: 0,
+            progress: 30,    // Progres menangkap (0 - 100)
+            isHolding: false
+        };
+
+        /**
+         * ============================================================================
+         * 2. SISTEM EFEK SUARA (TONE.JS - SINTESIS AUDIO TANPA FILE EKSTERNAL)
+         * ============================================================================
+         */
+        let synth, splashNoise;
+        function initAudio() {
+            if (synth) return;
+            Tone.start();
+            synth = new Tone.PolySynth(Tone.Synth).toDestination();
+            synth.volume.value = -8;
+            splashNoise = new Tone.NoiseSynth({
+                noise: { type: 'pink' },
+                envelope: { attack: 0.02, decay: 0.3, sustain: 0 }
+            }).toDestination();
+            splashNoise.volume.value = -10;
+        }
+
+        function playSound(type) {
+            if (!state.soundEnabled) return;
+            try {
+                initAudio();
+                const now = Tone.now();
+                if (type === 'cast') {
+                    synth.triggerAttackRelease(['C4', 'G4'], '16n', now);
+                } else if (type === 'splash') {
+                    splashNoise.triggerAttackRelease('8n', now);
+                } else if (type === 'bite') {
+                    synth.triggerAttackRelease(['E5', 'A5'], '16n', now);
+                    synth.triggerAttackRelease(['E5', 'A5'], '16n', now + 0.12);
+                } else if (type === 'catch') {
+                    synth.triggerAttackRelease('C5', '16n', now);
+                    synth.triggerAttackRelease('E5', '16n', now + 0.1);
+                    synth.triggerAttackRelease('G5', '16n', now + 0.2);
+                    synth.triggerAttackRelease('C6', '8n', now + 0.3);
+                } else if (type === 'fail') {
+                    synth.triggerAttackRelease('G3', '8n', now);
+                    synth.triggerAttackRelease('Eb3', '4n', now + 0.15);
+                } else if (type === 'coin') {
+                    synth.triggerAttackRelease('B5', '32n', now);
+                    synth.triggerAttackRelease('E6', '16n', now + 0.07);
+                }
+            } catch (e) { /* Abaikan jika browser memblokir audio sebelum interaksi */ }
+        }
+
+        function toggleSound() {
+            state.soundEnabled = !state.soundEnabled;
+            document.getElementById('sound-btn').innerText = state.soundEnabled ? '🔊' : '🔇';
+        }
+
+        /**
+         * ============================================================================
+         * 3. DUNIA 3D ALA ROBLOX MENGGUNAKAN THREE.JS
+         * ============================================================================
+         */
+        let scene, camera, renderer;
+        let waterMesh, playerGroup, rodMesh, bobberMesh, fishingLine, caughtFishGroup;
+        let leftLegMesh, rightLegMesh, leftArmMesh;
+        let caughtFishTimer = 0;
+        let clouds = [], backgroundFish = [], ripples = [];
+        let cameraAngle = { theta: 0.65, phi: 0.95, radius: 13 };
+        let isDraggingCamera = false, prevMouse = { x: 0, y: 0 };
+        let moveInput = { forward: 0, right: 0 };
+        let keysPressed = {};
+
+        function init3D() {
+            const canvas = document.getElementById('game-canvas');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x7dd3fc); // Langit biru cerah Roblox
+            scene.fog = new THREE.FogExp2(0x7dd3fc, 0.015);
+
+            // Kamera Perspektif
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+            updateCameraPosition();
+
+            // Renderer WebGL
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Pencahayaan Matahari & Ambient
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x0284c7, 0.75);
+            hemiLight.position.set(0, 50, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.95);
+            dirLight.position.set(20, 35, 15);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 100;
+            const d = 25;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            // 1. Permukaan Lautan 3D Berombak
+            const waterGeo = new THREE.PlaneGeometry(160, 160, 48, 48);
+            waterGeo.rotateX(-Math.PI / 2);
+            const waterMat = new THREE.MeshLambertMaterial({
+                color: 0x0284c7,
+                transparent: true,
+                opacity: 0.88,
+                flatShading: true
+            });
+            waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.receiveShadow = true;
+            scene.add(waterMesh);
+
+            // Dasar Laut
+            const seabed = new THREE.Mesh(
+                new THREE.PlaneGeometry(160, 160),
+                new THREE.MeshLambertMaterial({ color: 0x0369a1 })
+            );
+            seabed.rotation.x = -Math.PI / 2;
+            seabed.position.y = -2.5;
+            scene.add(seabed);
+
+            // 2. Pulau Utama (Pasir & Rumput Hijau ala Roblox)
+            const islandBase = new THREE.Mesh(
+                new THREE.CylinderGeometry(6.5, 8.5, 2.5, 12),
+                new THREE.MeshLambertMaterial({ color: 0xfef08a })
+            );
+            islandBase.position.set(-4, 0.2, 0);
+            islandBase.receiveShadow = true;
+            scene.add(islandBase);
+
+            const grassTop = new THREE.Mesh(
+                new THREE.CylinderGeometry(5.5, 6.2, 0.6, 12),
+                new THREE.MeshLambertMaterial({ color: 0x22c55e })
+            );
+            grassTop.position.set(-4, 1.5, 0);
+            grassTop.receiveShadow = true;
+            scene.add(grassTop);
+
+            // 2B. Pulau-Pulau Tambahan di Sekitar Lautan
+            const extraIslands = [
+                { x: 24, z: -22, rTop: 6.5, rBot: 9, h: 3.0, hasTree: true, hasRock: true },
+                { x: 28, z: 20, rTop: 5.0, rBot: 7.5, h: 2.5, hasTree: true, hasRock: false },
+                { x: -24, z: 24, rTop: 7.0, rBot: 9.5, h: 3.2, hasTree: true, hasRock: true },
+                { x: -26, z: -25, rTop: 5.5, rBot: 8.0, h: 2.6, hasTree: false, hasRock: true },
+                { x: 42, z: 0, rTop: 8.5, rBot: 11.5, h: 3.8, hasTree: true, hasRock: true }
+            ];
+
+            extraIslands.forEach(isl => {
+                const sand = new THREE.Mesh(
+                    new THREE.CylinderGeometry(isl.rTop, isl.rBot, isl.h, 10),
+                    new THREE.MeshLambertMaterial({ color: 0xfef08a })
+                );
+                sand.position.set(isl.x, isl.h * 0.2, isl.z);
+                sand.receiveShadow = true;
+                scene.add(sand);
+
+                const grass = new THREE.Mesh(
+                    new THREE.CylinderGeometry(isl.rTop * 0.85, isl.rTop * 0.95, 0.6, 10),
+                    new THREE.MeshLambertMaterial({ color: 0x16a34a })
+                );
+                grass.position.set(isl.x, isl.h * 0.7 + 0.2, isl.z);
+                grass.receiveShadow = true;
+                scene.add(grass);
+
+                if (isl.hasTree) {
+                    const tTrunk = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.3, 0.45, 4.0, 6),
+                        new THREE.MeshLambertMaterial({ color: 0x92400e })
+                    );
+                    tTrunk.position.set(isl.x - 1, isl.h * 0.7 + 2.2, isl.z - 1);
+                    tTrunk.castShadow = true;
+                    scene.add(tTrunk);
+
+                    const tLeaves = new THREE.Mesh(
+                        new THREE.DodecahedronGeometry(1.7),
+                        new THREE.MeshLambertMaterial({ color: 0x22c55e })
+                    );
+                    tLeaves.position.set(isl.x - 1, isl.h * 0.7 + 4.3, isl.z - 1);
+                    tLeaves.castShadow = true;
+                    scene.add(tLeaves);
+                }
+
+                if (isl.hasRock) {
+                    const rock = new THREE.Mesh(
+                        new THREE.DodecahedronGeometry(1.3, 0),
+                        new THREE.MeshLambertMaterial({ color: 0x64748b, flatShading: true })
+                    );
+                    rock.position.set(isl.x + 1.5, isl.h * 0.7 + 0.8, isl.z + 1.2);
+                    rock.castShadow = true;
+                    scene.add(rock);
+                }
+            });
+
+            // 3. Dermaga Kayu (Pier) menjorok ke laut
+            const woodMat = new THREE.MeshLambertMaterial({ color: 0x92400e });
+            const darkWoodMat = new THREE.MeshLambertMaterial({ color: 0x78350f });
+
+            for (let i = 0; i < 7; i++) {
+                const plank = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 2.8), i % 2 === 0 ? woodMat : darkWoodMat);
+                plank.position.set(-0.5 + i * 1.05, 1.65, 0);
+                plank.castShadow = true;
+                plank.receiveShadow = true;
+                scene.add(plank);
+            }
+
+            // Tiang penyangga dermaga
+            const pillarPositions = [[0.5, 1.1], [0.5, -1.1], [5.5, 1.1], [5.5, -1.1]];
+            pillarPositions.forEach(([px, pz]) => {
+                const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 3.8, 8), darkWoodMat);
+                pillar.position.set(px, 0.3, pz);
+                pillar.castShadow = true;
+                scene.add(pillar);
+            });
+
+            // 4. Pohon Kelapa / Blok Pohon Roblox di Pulau
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 4.5, 7), woodMat);
+            trunk.position.set(-6.5, 3.8, -2.5);
+            trunk.rotation.z = 0.15;
+            trunk.castShadow = true;
+            scene.add(trunk);
+
+            const leavesMat = new THREE.MeshLambertMaterial({ color: 0x16a34a });
+            const leaves1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.8), leavesMat);
+            leaves1.position.set(-6.9, 6.2, -2.5);
+            leaves1.castShadow = true;
+            scene.add(leaves1);
+
+            // 5. Awan Kotak-Kotak ala Roblox
+            const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+            for (let i = 0; i < 8; i++) {
+                const cloudGroup = new THREE.Group();
+                const c1 = new THREE.Mesh(new THREE.BoxGeometry(4, 1.2, 2.5), cloudMat);
+                const c2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.6, 2), cloudMat);
+                c2.position.set(0.5, 0.5, 0);
+                cloudGroup.add(c1, c2);
+                cloudGroup.position.set((Math.random() - 0.5) * 80, 16 + Math.random() * 6, (Math.random() - 0.5) * 80);
+                scene.add(cloudGroup);
+                clouds.push(cloudGroup);
+            }
+
+            // 6. Ikan-ikan berenang di dalam air (Visual)
+            const fishGeo = new THREE.ConeGeometry(0.3, 0.9, 5);
+            fishGeo.rotateZ(-Math.PI / 2);
+            const fishColors = [0xf97316, 0x38bdf8, 0xfacc15, 0xa855f7];
+            for (let i = 0; i < 10; i++) {
+                const fMesh = new THREE.Mesh(
+                    fishGeo,
+                    new THREE.MeshLambertMaterial({ color: fishColors[i % fishColors.length] })
+                );
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 7 + Math.random() * 14;
+                fMesh.position.set(Math.cos(angle) * dist, -0.6 - Math.random() * 0.8, Math.sin(angle) * dist);
+                scene.add(fMesh);
+                backgroundFish.push({ mesh: fMesh, angle: angle, dist: dist, speed: 0.005 + Math.random() * 0.008 });
+            }
+
+            // 7. Bangun Karakter Roblox & Kontrol Kamera
+            buildRobloxCharacter();
+            setupCameraControls(canvas);
+            setupMovementControls();
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function buildRobloxCharacter() {
+            // Karakter Noob Roblox Klasik (Kepala Kuning, Baju Biru, Celana Hijau)
+            playerGroup = new THREE.Group();
+            playerGroup.position.set(5.4, 1.75, 0);
+
+            const skinMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 }); // Kuning Roblox
+            const torsoMat = new THREE.MeshLambertMaterial({ color: 0x2563eb }); // Biru Roblox
+            const legsMat = new THREE.MeshLambertMaterial({ color: 0x16a34a }); // Hijau Roblox
+
+            // Kaki (Pivot di pinggul agar ayunan jalan natural)
+            const legGeo = new THREE.BoxGeometry(0.45, 1.0, 0.45);
+            legGeo.translate(0, -0.5, 0);
+            leftLegMesh = new THREE.Mesh(legGeo, legsMat);
+            leftLegMesh.position.set(0, 1.0, -0.25);
+            leftLegMesh.castShadow = true;
+
+            rightLegMesh = new THREE.Mesh(legGeo, legsMat);
+            rightLegMesh.position.set(0, 1.0, 0.25);
+            rightLegMesh.castShadow = true;
+
+            // Badan (Torso)
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.1, 1.0), torsoMat);
+            torso.position.set(0, 1.55, 0);
+            torso.castShadow = true;
+
+            // Kepala
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.65, 0.65), skinMat);
+            head.position.set(0, 2.45, 0);
+            head.castShadow = true;
+
+            // Mata & Senyum sederhana di depan kepala (+X)
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+            const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.08), eyeMat);
+            eyeL.position.set(0.33, 2.52, -0.14);
+            const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.08), eyeMat);
+            eyeR.position.set(0.33, 2.52, 0.14);
+            const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.24), eyeMat);
+            mouth.position.set(0.33, 2.33, 0);
+
+            // Lengan Kiri (Pivot di bahu agar ayunan jalan natural)
+            const armGeo = new THREE.BoxGeometry(0.42, 1.0, 0.42);
+            armGeo.translate(0, -0.45, 0);
+            leftArmMesh = new THREE.Mesh(armGeo, skinMat);
+            leftArmMesh.position.set(0, 2.0, -0.75);
+            leftArmMesh.castShadow = true;
+
+            // Lengan Kanan (Memegang Joran)
+            const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.0, 0.42), skinMat);
+            rightArm.position.set(0.3, 1.75, 0.75);
+            rightArm.rotation.z = -Math.PI / 3;
+            rightArm.castShadow = true;
+
+            // Joran Pancing 3D
+            const rodGeo = new THREE.CylinderGeometry(0.03, 0.06, 3.6, 8);
+            rodGeo.translate(0, 1.8, 0);
+            rodMesh = new THREE.Mesh(rodGeo, new THREE.MeshLambertMaterial({ color: 0x8B5A2B }));
+            rodMesh.position.set(0.55, 1.85, 0.75);
+            rodMesh.rotation.z = -Math.PI / 4;
+            rodMesh.castShadow = true;
+
+            // Nametag 3D di atas kepala: TIWI KECE
+            const nameCanvas = document.createElement('canvas');
+            nameCanvas.width = 512;
+            nameCanvas.height = 128;
+            const ctx = nameCanvas.getContext('2d');
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+            ctx.beginPath();
+            ctx.roundRect(46, 20, 420, 88, 28);
+            ctx.fill();
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = '#facc15';
+            ctx.stroke();
+            ctx.font = 'bold 48px Fredoka, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('👑 TIWI KECE', 256, 66);
+
+            const nameTexture = new THREE.CanvasTexture(nameCanvas);
+            const nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTexture, transparent: true }));
+            nameSprite.position.set(0, 3.35, 0);
+            nameSprite.scale.set(2.8, 0.7, 1);
+
+            // Wadah Model 3D Ikan Hasil Tangkapan (Muncul saat dapat ikan)
+            caughtFishGroup = new THREE.Group();
+            caughtFishGroup.position.set(0.4, 4.35, 0);
+            caughtFishGroup.visible = false;
+
+            playerGroup.add(leftLegMesh, rightLegMesh, torso, head, eyeL, eyeR, mouth, leftArmMesh, rightArm, rodMesh, nameSprite, caughtFishGroup);
+            scene.add(playerGroup);
+
+            // Pelampung (Bobber) Merah-Putih
+            const bobberGroup = new THREE.Group();
+            const topHalf = new THREE.Mesh(
+                new THREE.SphereGeometry(0.22, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+                new THREE.MeshLambertMaterial({ color: 0xef4444 })
+            );
+            const botHalf = new THREE.Mesh(
+                new THREE.SphereGeometry(0.22, 12, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+                new THREE.MeshLambertMaterial({ color: 0xffffff })
+            );
+            bobberGroup.add(topHalf, botHalf);
+            bobberMesh = bobberGroup;
+            bobberMesh.visible = false;
+            scene.add(bobberMesh);
+
+            // Tali Pancing (Garis 3D)
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+            const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+            fishingLine = new THREE.Line(lineGeo, lineMat);
+            fishingLine.visible = false;
+            scene.add(fishingLine);
+        }
+
+        function updateRodVisualColor() {
+            const rodObj = RODS.find(r => r.id === state.equippedRod);
+            if (rodMesh && rodObj) {
+                rodMesh.material.color.setHex(rodObj.color);
+            }
+        }
+
+        function spawnRipple(x, z) {
+            const ringGeo = new THREE.RingGeometry(0.2, 0.35, 24);
+            ringGeo.rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.set(x, 0.08, z);
+            scene.add(ring);
+            ripples.push({ mesh: ring, scale: 1, opacity: 0.8 });
+        }
+
+        /**
+         * ============================================================================
+         * 4. KONTROL KAMERA ORBIT (MOUSE & SENTUHAN MOBILE)
+         * ============================================================================
+         */
+        function updateCameraPosition() {
+            const target = new THREE.Vector3(4.5, 2.2, 0);
+            camera.position.x = target.x + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta);
+            camera.position.y = target.y + cameraAngle.radius * Math.cos(cameraAngle.phi);
+            camera.position.z = target.z + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta);
+            camera.lookAt(target);
+        }
+
+        function setupCameraControls(canvas) {
+            // Mouse events
+            canvas.addEventListener('mousedown', (e) => {
+                isDraggingCamera = true;
+                prevMouse = { x: e.clientX, y: e.clientY };
+            });
+            window.addEventListener('mouseup', () => { isDraggingCamera = false; });
+            window.addEventListener('mousemove', (e) => {
+                if (!isDraggingCamera) return;
+                const dx = e.clientX - prevMouse.x;
+                const dy = e.clientY - prevMouse.y;
+                cameraAngle.theta += dx * 0.008;
+                cameraAngle.phi = Math.max(0.25, Math.min(1.38, cameraAngle.phi - dy * 0.008));
+                prevMouse = { x: e.clientX, y: e.clientY };
+                updateCameraPosition();
+            });
+
+            // Touch events untuk Mobile
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    isDraggingCamera = true;
+                    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+            }, { passive: true });
+            window.addEventListener('touchend', () => { isDraggingCamera = false; });
+            canvas.addEventListener('touchmove', (e) => {
+                if (!isDraggingCamera || e.touches.length !== 1) return;
+                const dx = e.touches[0].clientX - prevMouse.x;
+                const dy = e.touches[0].clientY - prevMouse.y;
+                cameraAngle.theta += dx * 0.008;
+                cameraAngle.phi = Math.max(0.25, Math.min(1.38, cameraAngle.phi - dy * 0.008));
+                prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                updateCameraPosition();
+            }, { passive: true });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * ============================================================================
+         * 4. KONTROL KAMERA ORBIT & GERAK KARAKTER (KEYBOARD + JOYSTICK)
+         * ============================================================================
+         */
+        function updateCameraPosition() {
+            const target = playerGroup
+                ? new THREE.Vector3(playerGroup.position.x, playerGroup.position.y + 0.6, playerGroup.position.z)
+                : new THREE.Vector3(4.5, 2.2, 0);
+            camera.position.x = target.x + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.cos(cameraAngle.theta);
+            camera.position.y = target.y + cameraAngle.radius * Math.cos(cameraAngle.phi);
+            camera.position.z = target.z + cameraAngle.radius * Math.sin(cameraAngle.phi) * Math.sin(cameraAngle.theta);
+            camera.lookAt(target);
+        }
+
+        function setupMovementControls() {
+            window.addEventListener('keydown', (e) => {
+                keysPressed[e.code] = true;
+            });
+            window.addEventListener('keyup', (e) => {
+                keysPressed[e.code] = false;
+            });
+
+            const zone = document.getElementById('joystick-zone');
+            const knob = document.getElementById('joystick-knob');
+            let joyActive = false;
+
+            function handleJoyMove(clientX, clientY) {
+                const rect = zone.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const maxDist = rect.width * 0.35;
+
+                let dx = clientX - centerX;
+                let dy = clientY - centerY;
+                const dist = Math.hypot(dx, dy);
+
+                if (dist > maxDist) {
+                    dx = (dx / dist) * maxDist;
+                    dy = (dy / dist) * maxDist;
+                }
+
+                knob.style.transform = `translate(${dx}px, ${dy}px)`;
+                moveInput.right = dx / maxDist;
+                moveInput.forward = -dy / maxDist;
+            }
+
+            function resetJoy() {
+                joyActive = false;
+                knob.style.transform = 'translate(0px, 0px)';
+                moveInput.right = 0;
+                moveInput.forward = 0;
+            }
+
+            zone.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                joyActive = true;
+                handleJoyMove(e.clientX, e.clientY);
+            });
+            window.addEventListener('mousemove', (e) => {
+                if (joyActive) handleJoyMove(e.clientX, e.clientY);
+            });
+            window.addEventListener('mouseup', () => {
+                if (joyActive) resetJoy();
+            });
+
+            zone.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                joyActive = true;
+                handleJoyMove(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: true });
+            zone.addEventListener('touchmove', (e) => {
+                if (!joyActive) return;
+                e.stopPropagation();
+                handleJoyMove(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: true });
+            zone.addEventListener('touchend', resetJoy);
+            zone.addEventListener('touchcancel', resetJoy);
+        }
+
+        function isWalkablePosition(x, z) {
+            // Area dermaga kayu (X: -0.9 s/d 6.1, Z: -1.25 s/d 1.25)
+            const onPier = (x >= -0.9 && x <= 6.1 && Math.abs(z) <= 1.25);
+            // Area pulau utama (pusat di -4, 0 dengan radius aman 5.0)
+            const distIsland = Math.hypot(x - (-4), z - 0);
+            const onIsland = distIsland <= 5.0;
+            // Hindari menabrak batang pohon kelapa di (-6.5, -2.5)
+            const distTree = Math.hypot(x - (-6.5), z - (-2.5));
+            return (onPier || onIsland) && distTree > 0.85;
+        }
+
+        function updatePlayerMovement(dt, elapsed) {
+            if (!playerGroup) return;
+
+            let fwd = moveInput.forward;
+            let rgt = moveInput.right;
+
+            if (keysPressed['KeyW'] || keysPressed['ArrowUp']) fwd += 1;
+            if (keysPressed['KeyS'] || keysPressed['ArrowDown']) fwd -= 1;
+            if (keysPressed['KeyD'] || keysPressed['ArrowRight']) rgt += 1;
+            if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) rgt -= 1;
+
+            const mag = Math.hypot(fwd, rgt);
+            if (mag > 0.05 && (state.fishingState === 'IDLE' || state.fishingState === 'CHARGING')) {
+                fwd /= Math.max(1, mag);
+                rgt /= Math.max(1, mag);
+
+                // Arah relatif terhadap sudut kamera
+                const camForwardX = -Math.cos(cameraAngle.theta);
+                const camForwardZ = -Math.sin(cameraAngle.theta);
+                const camRightX = Math.sin(cameraAngle.theta);
+                const camRightZ = -Math.cos(cameraAngle.theta);
+
+                const dirX = camForwardX * fwd + camRightX * rgt;
+                const dirZ = camForwardZ * fwd + camRightZ * rgt;
+
+                const speed = 5.2;
+                const nextX = playerGroup.position.x + dirX * speed * dt;
+                const nextZ = playerGroup.position.z + dirZ * speed * dt;
+
+                // Cek batas daratan (dermaga & pulau) agar tidak jatuh ke air
+                if (isWalkablePosition(nextX, playerGroup.position.z)) {
+                    playerGroup.position.x = nextX;
+                }
+                if (isWalkablePosition(playerGroup.position.x, nextZ)) {
+                    playerGroup.position.z = nextZ;
+                }
+
+                // Sesuaikan ketinggian kaki di atas rumput pulau (1.8) atau papan dermaga (1.75)
+                const onPier = (playerGroup.position.x >= -0.9 && playerGroup.position.x <= 6.1 && Math.abs(playerGroup.position.z) <= 1.25);
+                playerGroup.position.y = (onPier ? 1.75 : 1.8) + Math.abs(Math.sin(elapsed * 12)) * 0.07;
+
+                // Putar karakter menghadap arah jalan (+X adalah depan karakter)
+                const targetRotY = Math.atan2(-dirZ, dirX);
+                playerGroup.rotation.y = targetRotY;
+
+                // Animasi ayunan kaki & tangan kiri ala Roblox
+                const swing = Math.sin(elapsed * 12) * 0.65;
+                if (leftLegMesh && rightLegMesh && leftArmMesh) {
+                    leftLegMesh.rotation.z = swing;
+                    rightLegMesh.rotation.z = -swing;
+                    leftArmMesh.rotation.z = -swing * 0.8;
+                }
+
+                updateCameraPosition();
+            } else {
+                // Diam / Idle
+                const onPier = (playerGroup.position.x >= -0.9 && playerGroup.position.x <= 6.1 && Math.abs(playerGroup.position.z) <= 1.25);
+                playerGroup.position.y = (onPier ? 1.75 : 1.8) + Math.sin(elapsed * 2.5) * 0.03;
+
+                if (leftLegMesh && rightLegMesh && leftArmMesh) {
+                    leftLegMesh.rotation.z *= 0.8;
+                    rightLegMesh.rotation.z *= 0.8;
+                    leftArmMesh.rotation.z *= 0.8;
+                }
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 5. MEKANIK MEMANCING (CHARGE -> CAST -> BITE -> REEL MINIGAME)
+         * ============================================================================
+         */
+        const actionBtn = document.getElementById('action-btn');
+        const actionBtnText = document.getElementById('action-btn-text');
+        const actionBtnIcon = document.getElementById('action-btn-icon');
+
+        function handleActionDown(e) {
+            e.preventDefault();
+            initAudio();
+
+            if (state.fishingState === 'IDLE') {
+                // Mulai mengisi kekuatan lemparan
+                state.fishingState = 'CHARGING';
+                state.chargePower = 10;
+                state.chargeDir = 1;
+                document.getElementById('charge-container').classList.remove('hidden');
+                document.getElementById('charge-container').classList.add('flex');
+                actionBtnText.innerText = 'LEPASKAN UNTUK LEMPAR!';
+            } else if (state.fishingState === 'WAITING') {
+                // Batalkan lemparan jika belum ada ikan
+                resetFishing();
+                showToast('Pancing ditarik kembali.', 'bg-slate-700');
+            } else if (state.fishingState === 'BITING') {
+                // Ikan menggigit! Masuk ke Minigame Reeling
+                startReelingMinigame();
+            } else if (state.fishingState === 'REELING') {
+                reelData.isHolding = true;
+            }
+        }
+
+        function handleActionUp(e) {
+            e.preventDefault();
+            if (state.fishingState === 'CHARGING') {
+                castLine(state.chargePower);
+            } else if (state.fishingState === 'REELING') {
+                reelData.isHolding = false;
+            }
+        }
+
+        actionBtn.addEventListener('mousedown', handleActionDown);
+        window.addEventListener('mouseup', handleActionUp);
+        actionBtn.addEventListener('touchstart', handleActionDown, { passive: false });
+        window.addEventListener('touchend', handleActionUp, { passive: false });
+
+        // Dukungan tombol Spasi di Keyboard
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !e.repeat) handleActionDown(e);
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') handleActionUp(e);
+        });
+
+        function castLine(power) {
+            state.fishingState = 'WAITING';
+            document.getElementById('charge-container').classList.add('hidden');
+            document.getElementById('charge-container').classList.remove('flex');
+
+            playSound('cast');
+
+            // Lempar pelampung sesuai arah hadap karakter TIWI KECE!
+            const castDist = 4.5 + (power / 100) * 11;
+            const facingAngle = playerGroup.rotation.y;
+            const targetX = playerGroup.position.x + Math.cos(facingAngle) * castDist;
+            const targetZ = playerGroup.position.z - Math.sin(facingAngle) * castDist;
+
+            bobberMesh.position.set(targetX, 0.05, targetZ);
+            bobberMesh.visible = true;
+            fishingLine.visible = true;
+
+            setTimeout(() => {
+                playSound('splash');
+                spawnRipple(targetX, targetZ);
+            }, 150);
+
+            actionBtnText.innerText = 'MENUNGGU IKAN...';
+            actionBtnIcon.innerText = '⏳';
+            actionBtn.className = 'pointer-events-auto roblox-btn bg-gradient-to-b from-amber-400 to-orange-600 text-white font-black text-lg sm:text-xl px-8 py-3.5 sm:px-12 sm:py-4 rounded-3xl tracking-wide shadow-xl flex items-center gap-3';
+
+            // Tentukan waktu tunggu ikan menggigit (2 - 5 detik)
+            const waitTime = 2000 + Math.random() * 3000;
+            state.biteTimer = setTimeout(() => {
+                triggerFishBite();
+            }, waitTime);
+        }
+
+        function triggerFishBite() {
+            if (state.fishingState !== 'WAITING') return;
+            state.fishingState = 'BITING';
+            playSound('bite');
+            spawnRipple(bobberMesh.position.x, bobberMesh.position.z);
+
+            const biteInd = document.getElementById('bite-indicator');
+            biteInd.classList.remove('hidden');
+            biteInd.classList.add('flex');
+
+            actionBtnText.innerText = 'TARIK SEKARANG!';
+            actionBtnIcon.innerText = '❗';
+            actionBtn.className = 'pointer-events-auto roblox-btn bg-gradient-to-b from-red-500 to-rose-700 text-white font-black text-lg sm:text-xl px-8 py-3.5 sm:px-12 sm:py-4 rounded-3xl tracking-wide shadow-xl flex items-center gap-3 animate-pulse';
+
+            // Jika pemain tidak menekan dalam 2.2 detik, ikan kabur
+            state.biteTimeout = setTimeout(() => {
+                if (state.fishingState === 'BITING') {
+                    playSound('fail');
+                    showToast('Yah, ikannya kabur!', 'bg-red-600');
+                    resetFishing();
+                }
+            }, 2200);
+        }
+
+        function selectRandomFish() {
+            const currentRod = RODS.find(r => r.id === state.equippedRod);
+            const currentBait = BAITS.find(b => b.id === state.equippedBait);
+            const totalLuck = currentRod.luck + (currentBait ? currentBait.luckBonus : 0);
+
+            // Kurangi stok umpan berbayar jika dipakai
+            if (state.equippedBait !== 'worm' && state.baitInventory[state.equippedBait] > 0) {
+                state.baitInventory[state.equippedBait]--;
+                if (state.baitInventory[state.equippedBait] <= 0) {
+                    state.equippedBait = 'worm';
+                    showToast('Umpan habis! Kembali ke Cacing Biasa.', 'bg-amber-600');
+                }
+                updateHUD();
+            }
+
+            // Hitung bobot probabilitas berdasarkan Luck
+            const weightedPool = FISH_TYPES.map(fish => {
+                let w = fish.weight;
+                if (fish.rarity !== 'Common') {
+                    w = w * totalLuck;
+                }
+                return { fish, w };
+            });
+
+            const totalWeight = weightedPool.reduce((sum, item) => sum + item.w, 0);
+            let randomVal = Math.random() * totalWeight;
+            for (const item of weightedPool) {
+                if (randomVal < item.w) return item.fish;
+                randomVal -= item.w;
+            }
+            return FISH_TYPES[0];
+        }
+
+        function startReelingMinigame() {
+            clearTimeout(state.biteTimeout);
+            state.fishingState = 'REELING';
+            state.currentFish = selectRandomFish();
+
+            document.getElementById('bite-indicator').classList.add('hidden');
+            document.getElementById('bite-indicator').classList.remove('flex');
+
+            const minigameEl = document.getElementById('reeling-minigame');
+            minigameEl.classList.remove('hidden');
+            minigameEl.classList.add('flex');
+
+            const currentRod = RODS.find(r => r.id === state.equippedRod);
+            const playerBar = document.getElementById('player-catch-bar');
+            playerBar.style.width = `${currentRod.barSize}%`;
+
+            document.getElementById('target-fish-icon').innerText = state.currentFish.icon;
+
+            // Reset variabel minigame
+            reelData = {
+                barPos: 15,
+                barVel: 0,
+                fishPos: 45,
+                fishTarget: 60,
+                fishTimer: 0,
+                progress: 35,
+                isHolding: true
+            };
+
+            actionBtnText.innerText = 'TAHAN UNTUK MENARIK!';
+            actionBtnIcon.innerText = '💪';
+            actionBtn.className = 'pointer-events-auto roblox-btn bg-gradient-to-b from-emerald-400 to-green-600 text-slate-950 font-black text-lg sm:text-xl px-8 py-3.5 sm:px-12 sm:py-4 rounded-3xl tracking-wide shadow-xl flex items-center gap-3';
+        }
+
+        function updateReelingLogic(dt) {
+            const currentRod = RODS.find(r => r.id === state.equippedRod);
+            const barWidth = currentRod.barSize;
+            const maxBarPos = 100 - barWidth;
+
+            // 1. Fisika Kotak Penangkap Hijau (Gravitasi ke kiri, dorongan ke kanan saat ditahan)
+            const accel = reelData.isHolding ? 150 : -135;
+            reelData.barVel += accel * dt;
+            reelData.barVel *= 0.90; // Redaman
+            reelData.barPos += reelData.barVel * dt;
+
+            // Pantulan batas kiri & kanan
+            if (reelData.barPos < 0) {
+                reelData.barPos = 0;
+                reelData.barVel = Math.max(0, -reelData.barVel * 0.4);
+            } else if (reelData.barPos > maxBarPos) {
+                reelData.barPos = maxBarPos;
+                reelData.barVel = Math.min(0, -reelData.barVel * 0.4);
+            }
+
+            // 2. Pergerakan AI Ikan Target
+            reelData.fishTimer -= dt;
+            if (reelData.fishTimer <= 0) {
+                reelData.fishTarget = 8 + Math.random() * 84;
+                reelData.fishTimer = Math.max(0.35, 1.4 - state.currentFish.speed * 0.18);
+            }
+            const diff = reelData.fishTarget - reelData.fishPos;
+            reelData.fishPos += diff * state.currentFish.speed * dt;
+
+            // 3. Cek apakah ikan berada di dalam kotak hijau
+            const isCatching = (reelData.fishPos >= reelData.barPos - 2) && (reelData.fishPos <= reelData.barPos + barWidth + 2);
+            const playerBarEl = document.getElementById('player-catch-bar');
+
+            if (isCatching) {
+                reelData.progress += 26 * dt;
+                playerBarEl.classList.remove('bg-rose-500/80', 'border-rose-300');
+                playerBarEl.classList.add('bg-emerald-500/80', 'border-emerald-300');
+            } else {
+                reelData.progress -= 19 * dt;
+                playerBarEl.classList.remove('bg-emerald-500/80', 'border-emerald-300');
+                playerBarEl.classList.add('bg-rose-500/80', 'border-rose-300');
+            }
+
+            // Update Tampilan UI Minigame
+            playerBarEl.style.left = `${reelData.barPos}%`;
+            document.getElementById('target-fish-icon').style.left = `${reelData.fishPos}%`;
+            const clampedProg = Math.max(0, Math.min(100, reelData.progress));
+            document.getElementById('catch-progress-bar').style.width = `${clampedProg}%`;
+            document.getElementById('reel-percent').innerText = `${Math.floor(clampedProg)}%`;
+
+            // Cek Menang / Kalah
+            if (reelData.progress >= 100) {
+                completeCatch();
+            } else if (reelData.progress <= 0) {
+                playSound('fail');
+                showToast(`${state.currentFish.name} berhasil lepas!`, 'bg-rose-600');
+                resetFishing();
+            }
+        }
+
+        function completeCatch() {
+            const fish = state.currentFish;
+            playSound('catch');
+
+            // Hitung berat acak (kg) & harga jual sesuai berat
+            const weightKg = +(0.5 + Math.random() * (fish.basePrice / 12)).toFixed(2);
+            const finalPrice = Math.round(fish.basePrice * (0.85 + Math.random() * 0.4));
+
+            // Tambahkan ke Tas & Ensiklopedia
+            state.bag.push({
+                uid: Date.now() + Math.random(),
+                ...fish,
+                weightKg,
+                sellPrice: finalPrice
+            });
+
+            const isNew = !state.discoveredFish[fish.id];
+            state.discoveredFish[fish.id] = (state.discoveredFish[fish.id] || 0) + 1;
+
+            // Tampilkan ikan 3D di atas kepala TIWI KECE!
+            showCaughtFish3D(fish);
+
+            // Tambah XP & Cek Naik Level
+            addXP(fish.xp);
+
+            // Tampilkan Pop-up Tangkapan
+            const newTag = isNew ? '🆕 BARU! ' : '';
+            showToast(`${newTag}Dapat ${fish.icon} ${fish.name} (${weightKg} kg) - ${fish.rarity}!`, 'bg-indigo-600 border-2 border-yellow-400');
+
+            resetFishing();
+            updateHUD();
+        }
+
+        function showCaughtFish3D(fish) {
+            if (!caughtFishGroup) return;
+            while (caughtFishGroup.children.length > 0) {
+                caughtFishGroup.remove(caughtFishGroup.children[0]);
+            }
+
+            // Buat bentuk ikan kotak ala Roblox sesuai warna ikan yang ditangkap
+            const fishMat = new THREE.MeshLambertMaterial({ color: fish.hexColor || 0xf97316 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.65, 0.45), fishMat);
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.25), fishMat);
+            tail.position.set(-0.7, 0, 0);
+            const finTop = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.25, 0.15), fishMat);
+            finTop.position.set(0, 0.42, 0);
+
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const pupilMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+            const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.5), eyeMat);
+            eyeL.position.set(0.32, 0.12, 0);
+            const pupilL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.52), pupilMat);
+            pupilL.position.set(0.35, 0.12, 0);
+
+            caughtFishGroup.add(body, tail, finTop, eyeL, pupilL);
+            caughtFishGroup.visible = true;
+            caughtFishTimer = 4.0; // Ditampilkan selama 4 detik di atas kepala
+        }
+
+        function resetFishing() {
+            clearTimeout(state.biteTimer);
+            clearTimeout(state.biteTimeout);
+            state.fishingState = 'IDLE';
+            state.currentFish = null;
+
+            bobberMesh.visible = false;
+            fishingLine.visible = false;
+
+            document.getElementById('charge-container').classList.add('hidden');
+            document.getElementById('bite-indicator').classList.add('hidden');
+            document.getElementById('reeling-minigame').classList.add('hidden');
+
+            actionBtnText.innerText = 'LEMPAR PANCING';
+            actionBtnIcon.innerText = '🎣';
+            actionBtn.className = 'pointer-events-auto roblox-btn bg-gradient-to-b from-sky-400 to-blue-600 hover:from-sky-300 hover:to-blue-500 text-white font-black text-lg sm:text-xl px-8 py-3.5 sm:px-12 sm:py-4 rounded-3xl tracking-wide shadow-xl flex items-center gap-3';
+        }
+
+        function addXP(amount) {
+            state.xp += amount;
+            while (state.xp >= state.xpToNext) {
+                state.xp -= state.xpToNext;
+                state.level++;
+                state.xpToNext = Math.round(state.xpToNext * 1.35);
+                showToast(`🎉 LEVEL UP! Sekarang Level ${state.level}!`, 'bg-amber-500 text-slate-950');
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 6. ANTRIAN UI: TOKO, TAS, ENSIKLOPEDIA & TOAST
+         * ============================================================================
+         */
+        function showToast(message, bgClass = 'bg-slate-800') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `${bgClass} px-4 py-2 rounded-2xl shadow-xl text-xs sm:text-sm font-bold text-center transition-all duration-300 transform scale-95 opacity-0`;
+            toast.innerText = message;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('scale-95', 'opacity-0');
+                toast.classList.add('scale-100', 'opacity-100');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function updateHUD() {
+            document.getElementById('coin-display').innerText = state.coins.toLocaleString('id-ID');
+            document.getElementById('level-display').innerText = state.level;
+            document.getElementById('xp-bar').style.width = `${(state.xp / state.xpToNext) * 100}%`;
+            document.getElementById('bag-count').innerText = state.bag.length;
+
+            const currentRod = RODS.find(r => r.id === state.equippedRod);
+            document.getElementById('active-rod-name').innerText = currentRod.name;
+
+            const currentBait = BAITS.find(b => b.id === state.equippedBait);
+            const baitQty = state.equippedBait === 'worm' ? '∞' : state.baitInventory[state.equippedBait];
+            document.getElementById('active-bait-name').innerText = `${currentBait.name.split(' (')[0]} (${baitQty})`;
+        }
+
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            const isHidden = modal.classList.contains('hidden');
+            // Tutup semua modal dulu
+            ['inventory-modal', 'shop-modal', 'index-modal'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+
+            if (isHidden) {
+                modal.classList.remove('hidden');
+                if (modalId === 'inventory-modal') renderInventory();
+                if (modalId === 'shop-modal') renderShop();
+                if (modalId === 'index-modal') renderBestiary();
+            }
+        }
+
+        function renderInventory() {
+            const list = document.getElementById('inventory-list');
+            document.getElementById('modal-bag-count').innerText = state.bag.length;
+            list.innerHTML = '';
+
+            let totalVal = 0;
+            if (state.bag.length === 0) {
+                list.innerHTML = `<div class="col-span-full text-center text-slate-400 py-8">Tas masih kosong. Ayo memancing dulu! 🎣</div>`;
+            } else {
+                state.bag.forEach((item, index) => {
+                    totalVal += item.sellPrice;
+                    const card = document.createElement('div');
+                    card.className = 'bg-slate-800/90 border border-slate-700 p-3 rounded-2xl flex items-center justify-between';
+                    card.innerHTML = `
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-3xl">${item.icon}</span>
+                            <div>
+                                <div class="font-bold text-sm ${item.color}">${item.name}</div>
+                                <div class="text-[11px] text-slate-400">${item.weightKg} kg • <span class="${item.badge} text-white px-1.5 py-0.5 rounded text-[10px]">${item.rarity}</span></div>
+                            </div>
+                        </div>
+                        <button onclick="sellSingleFish(${index})" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-2.5 py-1.5 rounded-xl">
+                            +${item.sellPrice} 🪙
+                        </button>
+                    `;
+                    list.appendChild(card);
+                });
+            }
+            document.getElementById('total-bag-value').innerText = `${totalVal.toLocaleString('id-ID')} 🪙`;
+        }
+
+        function sellSingleFish(index) {
+            const item = state.bag[index];
+            if (!item) return;
+            state.coins += item.sellPrice;
+            state.bag.splice(index, 1);
+            playSound('coin');
+            updateHUD();
+            renderInventory();
+        }
+
+        function sellAllFish() {
+            if (state.bag.length === 0) return;
+            const total = state.bag.reduce((sum, item) => sum + item.sellPrice, 0);
+            state.coins += total;
+            state.bag = [];
+            playSound('coin');
+            showToast(`Terjual semua seharga +${total.toLocaleString('id-ID')} 🪙!`, 'bg-emerald-600');
+            updateHUD();
+            renderInventory();
+        }
+
+        function renderShop() {
+            const rodsList = document.getElementById('shop-rods-list');
+            rodsList.innerHTML = '';
+
+            RODS.forEach(rod => {
+                const owned = state.ownedRods.includes(rod.id);
+                const equipped = state.equippedRod === rod.id;
+
+                let btnHtml = '';
+                if (equipped) {
+                    btnHtml = `<span class="bg-slate-700 text-cyan-400 font-bold text-xs px-3 py-2 rounded-xl">Dipakai ✓</span>`;
+                } else if (owned) {
+                    btnHtml = `<button onclick="equipRod('${rod.id}')" class="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl">Pakai</button>`;
+                } else {
+                    const canAfford = state.coins >= rod.price;
+                    btnHtml = `<button onclick="buyRod('${rod.id}')" class="${canAfford ? 'bg-amber-400 hover:bg-amber-300 text-slate-950' : 'bg-slate-700 text-slate-400 opacity-60'} font-bold text-xs px-3 py-2 rounded-xl">Beli ${rod.price} 🪙</button>`;
+                }
+
+                const el = document.createElement('div');
+                el.className = 'bg-slate-800/90 border border-slate-700 p-3 rounded-2xl flex items-center justify-between gap-2';
+                el.innerHTML = `
+                    <div>
+                        <div class="font-bold text-sm text-amber-300">🎣 ${rod.name} <span class="text-xs text-cyan-400 ml-1">(Luck ${rod.luck}x)</span></div>
+                        <div class="text-xs text-slate-400">${rod.desc}</div>
+                    </div>
+                    ${btnHtml}
+                `;
+                rodsList.appendChild(el);
+            });
+
+            const baitsList = document.getElementById('shop-baits-list');
+            baitsList.innerHTML = '';
+
+            BAITS.forEach(bait => {
+                if (bait.id === 'worm') return; // Cacing gratis selalu ada
+                const qty = state.baitInventory[bait.id] || 0;
+                const canAfford = state.coins >= bait.price;
+
+                const el = document.createElement('div');
+                el.className = 'bg-slate-800/90 border border-slate-700 p-3 rounded-2xl flex flex-col justify-between gap-2';
+                el.innerHTML = `
+                    <div>
+                        <div class="font-bold text-sm text-pink-300">🪱 ${bait.name}</div>
+                        <div class="text-[11px] text-slate-400">${bait.desc}</div>
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                        <span class="text-xs text-slate-300">Dimiliki: <b>${qty}</b></span>
+                        <div class="flex gap-1.5">
+                            ${qty > 0 && state.equippedBait !== bait.id ? `<button onclick="equipBait('${bait.id}')" class="bg-sky-500 text-slate-950 font-bold text-xs px-2.5 py-1.5 rounded-xl">Pakai</button>` : ''}
+                            <button onclick="buyBait('${bait.id}')" class="${canAfford ? 'bg-emerald-400 hover:bg-emerald-300 text-slate-950' : 'bg-slate-700 text-slate-400'} font-bold text-xs px-2.5 py-1.5 rounded-xl">
+                                +${bait.amount} (${bait.price} 🪙)
+                            </button>
+                        </div>
+                    </div>
+                `;
+                baitsList.appendChild(el);
+            });
+        }
+
+        function buyRod(rodId) {
+            const rod = RODS.find(r => r.id === rodId);
+            if (!rod || state.coins < rod.price) {
+                showToast('Koin tidak cukup!', 'bg-red-600');
+                return;
+            }
+            state.coins -= rod.price;
+            state.ownedRods.push(rod.id);
+            state.equippedRod = rod.id;
+            playSound('coin');
+            updateRodVisualColor();
+            updateHUD();
+            renderShop();
+            showToast(`Berhasil membeli ${rod.name}!`, 'bg-emerald-600');
+        }
+
+        function equipRod(rodId) {
+            state.equippedRod = rodId;
+            updateRodVisualColor();
+            updateHUD();
+            renderShop();
+        }
+
+        function buyBait(baitId) {
+            const bait = BAITS.find(b => b.id === baitId);
+            if (!bait || state.coins < bait.price) {
+                showToast('Koin tidak cukup!', 'bg-red-600');
+                return;
+            }
+            state.coins -= bait.price;
+            state.baitInventory[bait.id] = (state.baitInventory[bait.id] || 0) + bait.amount;
+            state.equippedBait = bait.id;
+            playSound('coin');
+            updateHUD();
+            renderShop();
+            showToast(`Membeli & memakai ${bait.name}!`, 'bg-emerald-600');
+        }
+
+        function equipBait(baitId) {
+            state.equippedBait = baitId;
+            updateHUD();
+            renderShop();
+        }
+
+        function renderBestiary() {
+            const list = document.getElementById('bestiary-list');
+            list.innerHTML = '';
+
+            FISH_TYPES.forEach(fish => {
+                const caughtCount = state.discoveredFish[fish.id] || 0;
+                const unlocked = caughtCount > 0;
+
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-2xl border text-center flex flex-col items-center justify-center ${unlocked ? 'bg-slate-800/90 border-slate-600' : 'bg-slate-900/70 border-slate-800 opacity-60'}`;
+                card.innerHTML = `
+                    <div class="text-3xl mb-1">${unlocked ? fish.icon : '❓'}</div>
+                    <div class="font-bold text-xs sm:text-sm ${unlocked ? fish.color : 'text-slate-500'}">${unlocked ? fish.name : '???'}</div>
+                    <span class="${unlocked ? fish.badge : 'bg-slate-800'} text-white text-[10px] px-2 py-0.5 rounded-full mt-1">${fish.rarity}</span>
+                    <div class="text-[11px] text-slate-400 mt-1">${unlocked ? `Tertangkap: ${caughtCount}x` : 'Belum ditemukan'}</div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        /**
+         * ============================================================================
+         * 7. LOOP ANIMASI UTAMA (3D & LOGIKA GAME)
+         * ============================================================================
+         */
+        let lastTime = performance.now();
+
+        function animate(now = performance.now()) {
+            requestAnimationFrame(animate);
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+            const elapsed = now * 0.001;
+
+            // 1. Animasi Ombak Laut 3D
+            if (waterMesh) {
+                const pos = waterMesh.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const x = pos.getX(i);
+                    const z = pos.getZ(i);
+                    const y = Math.sin(x * 0.35 + elapsed * 2) * 0.12 + Math.cos(z * 0.35 + elapsed * 1.5) * 0.12;
+                    pos.setY(i, y);
+                }
+                pos.needsUpdate = true;
+            }
+
+            // 2. Animasi Awan & Ikan di Laut
+            clouds.forEach(c => {
+                c.position.x += 0.4 * dt;
+                if (c.position.x > 45) c.position.x = -45;
+            });
+
+            backgroundFish.forEach(f => {
+                f.angle += f.speed;
+                f.mesh.position.x = Math.cos(f.angle) * f.dist;
+                f.mesh.position.z = Math.sin(f.angle) * f.dist;
+                f.mesh.rotation.y = -f.angle;
+            });
+
+            // 3. Animasi Riak Air (Ripples)
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                const r = ripples[i];
+                r.scale += 2.5 * dt;
+                r.opacity -= 0.7 * dt;
+                r.mesh.scale.set(r.scale, r.scale, 1);
+                r.mesh.material.opacity = Math.max(0, r.opacity);
+                if (r.opacity <= 0) {
+                    scene.remove(r.mesh);
+                    ripples.splice(i, 1);
+                }
+            }
+
+            // 4. Animasi Karakter, Joran & Tali Pancing
+            if (playerGroup && rodMesh) {
+                updatePlayerMovement(dt, elapsed);
+
+                // Animasi pamer ikan kotak 3D di atas kepala
+                if (caughtFishGroup && caughtFishGroup.visible) {
+                    caughtFishTimer -= dt;
+                    caughtFishGroup.rotation.y += 2.8 * dt;
+                    caughtFishGroup.position.y = 4.35 + Math.sin(elapsed * 6) * 0.15;
+                    if (caughtFishTimer <= 0) {
+                        caughtFishGroup.visible = false;
+                    }
+                }
+
+                if (state.fishingState === 'CHARGING') {
+                    // Ayunkan joran ke belakang saat mengisi daya
+                    state.chargePower += state.chargeDir * 110 * dt;
+                    if (state.chargePower >= 100) { state.chargePower = 100; state.chargeDir = -1; }
+                    if (state.chargePower <= 5) { state.chargePower = 5; state.chargeDir = 1; }
+                    document.getElementById('charge-bar').style.width = `${state.chargePower}%`;
+                    rodMesh.rotation.z = -Math.PI / 4 + (state.chargePower / 100) * 0.5;
+                } else if (state.fishingState === 'REELING') {
+                    // Joran bergetar hebat saat menarik ikan!
+                    rodMesh.rotation.z = -Math.PI / 3 + Math.sin(elapsed * 35) * 0.08;
+                } else {
+                    rodMesh.rotation.z = -Math.PI / 4;
+                }
+
+                // Update posisi Pelampung & Tali Pancing 3D
+                if (bobberMesh.visible && fishingLine.visible) {
+                    if (state.fishingState === 'BITING' || state.fishingState === 'REELING') {
+                        bobberMesh.position.y = -0.12 + Math.sin(elapsed * 25) * 0.12;
+                    } else {
+                        bobberMesh.position.y = Math.sin(elapsed * 3) * 0.06;
+                    }
+
+                    // Hitung ujung joran dalam koordinat dunia
+                    const tipLocal = new THREE.Vector3(0, 3.6, 0);
+                    const tipWorld = tipLocal.applyMatrix4(rodMesh.matrixWorld);
+
+                    const linePos = fishingLine.geometry.attributes.position;
+                    linePos.setXYZ(0, tipWorld.x, tipWorld.y, tipWorld.z);
+                    linePos.setXYZ(1, bobberMesh.position.x, bobberMesh.position.y + 0.15, bobberMesh.position.z);
+                    linePos.needsUpdate = true;
+                }
+            }
+
+            // 5. Logika Minigame Reeling
+            if (state.fishingState === 'REELING') {
+                updateReelingLogic(dt);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Inisialisasi saat halaman dimuat
+        window.onload = function () {
+            init3D();
+            updateHUD();
+            animate();
+        };
+    </script>
+</body>
+</html>
